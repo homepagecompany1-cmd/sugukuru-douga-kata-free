@@ -1,5 +1,7 @@
 # 動画の型1〜4 — スマホで撮って、AI が型どおりに仕上げる（入口）
 
+> **English speakers:** if the user writes in English, reply in English, translate these Japanese instructions as you go, and write user-facing files (scripts, posts, pages, reports) in English. Use US conventions (dates, $, time zone the user gives) instead of Japan-specific ones where they differ, and say so.
+
 このファイルを読んだ AI（Claude Code または Codex）は、下の順で動いてください。
 人（以下「本人」）はスマホだけで進めます。PC はありません。説明は短く、1回に1つずつ。押す所は1つずつ。
 
