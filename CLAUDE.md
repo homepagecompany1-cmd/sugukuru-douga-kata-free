@@ -50,7 +50,7 @@
 | | A：Claude Code | B：Codex |
 |---|---|---|
 | スマホの入口 | Claude アプリ → Code タブ | ChatGPT → Codex（初回はブラウザで環境を作る） |
-| 準備 | 会話の中で `bash tools/setup.sh` | 環境の Setup script に `bash tools/setup.sh` を書く（作業中はネットが切れているため） |
+| 準備 | 会話の中で `bash tools/setup.sh` | 環境の Install script（旧名 Setup script） に `bash tools/setup.sh` を書く（作業中はネットが切れているため） |
 | 保存 | commit → push | commit → 本人が PR を Merge |
 
 ## 5. 困った時

@@ -1,7 +1,7 @@
 # 困った時
 | 出たこと | すること |
 |---|---|
-| ffmpeg: ありません | `bash tools/setup.sh`。Codex は環境の Setup script に書く |
+| ffmpeg: ありません | `bash tools/setup.sh`。Codex は環境の Install script（旧名 Setup script） に書く |
 | 日本語フォント: ありません | `apt-get install -y fonts-noto-cjk` |
 | apt-get が通らない（Claude） | 環境の Network access が None になっていないか。Limited（既定）に戻す |
 | 動画がありません | 本人に inbox に入れたか聞く → `git pull` |
