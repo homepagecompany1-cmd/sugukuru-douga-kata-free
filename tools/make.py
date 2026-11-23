@@ -343,16 +343,29 @@ def close_card(G, K, fp, work):
     return [out]
 
 
-def assign(files, rows):
-    """動画を原稿の行に当てる。k?_r{n} の n を優先、無ければ名前順。"""
-    m = {}
-    for f in files:
-        g = re.search(r'_r(\d+)', os.path.basename(f))
-        if g and 1 <= int(g.group(1)) <= len(rows): m.setdefault(int(g.group(1)) - 1, f)
-    rest = [f for f in sorted(files) if f not in m.values()]
-    for i in range(len(rows)):
-        if i not in m and rest: m[i] = rest.pop(0)
-    return m
+def assign(files, rows, kata, by_name=False):
+    """動画を原稿の場面に当てる（厳しめ）。
+    - 名前が k{型}_r{番号} の動画は、その番号の場面にだけ当てる。
+    - 同じ番号が2本・原稿に無い番号・型の違う動画・番号なしの動画が混ざっている時は、作らずに止める（problems に理由）。
+    - 番号の無い動画だけの時は、--by-name を付けた時だけ名前順に当てる（本数が場面の数と同じ時だけ）。"""
+    m, problems, seen = {}, [], {}
+    numbered = [f for f in files if re.search(r'_r(\d+)', os.path.basename(f))]
+    plain = [f for f in files if f not in numbered]
+    for f in numbered:
+        b = os.path.basename(f)
+        n = int(re.search(r'_r(\d+)', b).group(1)); k = re.search(r'(?:^|[^a-z])k(\d)_r', b)
+        if k and int(k.group(1)) != kata: problems.append(f'{b}：型{k.group(1)}の動画です（原稿は型{kata}）'); continue
+        if not 1 <= n <= len(rows): problems.append(f'{b}：場面{n}は原稿にありません（原稿は{len(rows)}場面）'); continue
+        if n - 1 in seen: problems.append(f'{b}：場面{n}が2本あります（もう1本は {os.path.basename(seen[n - 1])}）。要らない方を inbox から消してください'); continue
+        seen[n - 1] = f; m[n - 1] = f
+    if plain and numbered:
+        problems.append('番号つき（k?_r?）と番号なしの動画が混ざっています：' + '、'.join(os.path.basename(f) for f in plain) + '。どの場面か本人に聞いて、名前を k{型}_r{番号}.mp4 に直してください')
+    elif plain:
+        if not by_name: problems.append(f'番号なしの動画が{len(plain)}本あります。どれがどの場面か本人に確かめてから、--by-name を付けて作り直してください')
+        elif len(plain) != len(rows): problems.append(f'番号なしの動画が{len(plain)}本・原稿は{len(rows)}場面で、数が合いません')
+        else:
+            for i, f in enumerate(sorted(plain)): m[i] = f
+    return m, problems
 
 
 def split_one(src, n, work):
@@ -370,7 +383,7 @@ def split_one(src, n, work):
     mids = [m for m in mids if 1.0 < m[0] < total - 1.0]
     cuts = sorted(sorted(mids, key=lambda x: -x[1])[:n - 1])
     if len(cuts) < n - 1:
-        log(f'無音の切れ目が {len(cuts)} か所しかありません（必要 {n - 1}）。ある分だけで分けます。')
+        log(f'無音の切れ目が {len(cuts)} か所しかありません（必要 {n - 1}）。止めます（本人の OK があれば --allow-missing）。')
     pts = [0] + [c[0] for c in cuts] + [total]
     outs = []
     for k in range(len(pts) - 1):
@@ -387,6 +400,9 @@ def main():
     ap.add_argument('--inbox', default=os.path.join(ROOT, 'inbox'))
     ap.add_argument('--name', default='')
     ap.add_argument('--check', action='store_true')
+    ap.add_argument('--by-name', action='store_true', help='番号なしの動画を名前順に当てる（本人に確かめてから）')
+    ap.add_argument('--allow-missing', action='store_true', help='足りない場面を飛ばして作る（本人の OK をもらってから）')
+    ap.add_argument('--plan', action='store_true', help='作らずに、どの動画をどの場面に当てるかだけ出す')
     a = ap.parse_args()
     if a.check: sys.exit(0 if check() else 1)
     if not check(): sys.exit(1)
@@ -401,14 +417,27 @@ def main():
     name = re.sub(r'[^\w\-ぁ-んァ-ン一-龥ー]', '', a.name or G.get('dai', '') or f'kata{kata}')[:20] or f'kata{kata}'
     outdir = os.path.join(ROOT, 'out', f'{stamp}_{name}')
     work = os.path.join(outdir, 'work'); os.makedirs(work, exist_ok=True)
-    if len(files) == 1 and len(rows) > 1:
-        log('動画が1本なので、長い無音で行ごとに分けます')
+    big = [f for f in files if os.path.getsize(f) > 100 * 1024 * 1024]
+    if big: sys.exit('100MB を超える動画があります（GitHub に入りません）：' + '、'.join(os.path.basename(f) for f in big))
+    if len(files) == 1 and len(rows) > 1 and not re.search(r'_r\d+', os.path.basename(files[0])):
+        log('番号なしの動画が1本なので、長い無音で場面ごとに分けます')
         files = split_one(files[0], len(rows), work)
-    m = assign(files, rows)
+        if len(files) != len(rows) and not a.allow_missing:
+            shutil.rmtree(outdir, ignore_errors=True)
+            sys.exit(f'無音の切れ目が足りず {len(files)} 個にしか分けられませんでした（原稿は {len(rows)} 場面）。場面ごとに撮り直すか、本人の OK をもらって --allow-missing')
+        a.by_name = True
+    m, problems = assign(files, rows, kata, a.by_name)
+    missing = [i + 1 for i in range(len(rows)) if i not in m]
+    log('当て方：' + ' / '.join(f'場面{i + 1}←{os.path.basename(m[i]) if i in m else "（なし）"}' for i in range(len(rows))))
+    if problems or (missing and not a.allow_missing) or a.plan:
+        shutil.rmtree(outdir, ignore_errors=True)
+        for x in problems: log('⛔ ' + x)
+        if missing: log(f'⛔ 動画が無い場面：{missing}（撮り直して inbox に入れる。飛ばして作るのは本人の OK をもらって --allow-missing）')
+        sys.exit(0 if a.plan and not problems and not missing else 2)
     parts, used = [], 0
     for i, row in enumerate(rows):
         if i not in m:
-            log(f'{i + 1}行目の動画がないので飛ばします'); continue
+            log(f'場面{i + 1}は本人の OK で飛ばします'); continue
         log(f'{i + 1}/{len(rows)} 行目: {os.path.basename(m[i])}')
         p, k = build_row(i, m[i], row, G, K, fp, work); parts += p; used += 1
     parts += close_card(G, K, fp, work)
@@ -423,9 +452,18 @@ def main():
     run(['ffmpeg', '-v', 'error', '-y', '-ss', '0.5', '-i', out, '-frames:v', '1', '-q:v', '3', os.path.join(outdir, 'thumb.jpg')])
     shutil.rmtree(work, ignore_errors=True)
     _, _, d, _ = probe(out)
+    crf = int(K.get('crf', 23))
+    while os.path.getsize(out) > 90 * 1024 * 1024 and crf < 35:   # GitHub は 100MB を超えるファイルを拒否する
+        crf += 3; log(f'大きいので圧縮し直します（crf {crf}）')
+        tmp = out + '.tmp.mp4'
+        run(['ffmpeg', '-v', 'error', '-y', '-i', out, '-c:v', 'libx264', '-preset', 'medium', '-crf', str(crf), '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', tmp])
+        os.replace(tmp, out)
     mb = os.path.getsize(out) / 1e6
-    log(f'できました: {os.path.relpath(out, ROOT)}（{d:.0f}秒・{mb:.1f}MB・{used}/{len(rows)}行）')
-    if mb > 95: log('100MB を超えそうです。GitHub に入らないので、行を減らすか crf を上げてください。')
+    if os.path.getsize(out) > 95 * 1024 * 1024: sys.exit(f'⛔ {mb:.0f}MB で GitHub に入りません。場面を減らすか短くしてください（保存しないこと）')
+    with open(os.path.join(outdir, 'kensa.txt'), 'w', encoding='utf-8') as fh:
+        fh.write(f'場面 {used}/{len(rows)}' + (f'（飛ばした場面：{missing}・本人OK）' if missing else '') + f'\n長さ {d:.1f}秒\n大きさ {mb:.1f}MB\n')
+    log(f'できました: {os.path.relpath(out, ROOT)}（{d:.0f}秒・{mb:.1f}MB・{used}/{len(rows)}場面）')
+    if mb > 24: log('25MB を超えています。スマホのブラウザから直接は開きにくいことがあります（GitHub アプリか、PC で Download）。')
 
 
 if __name__ == '__main__':

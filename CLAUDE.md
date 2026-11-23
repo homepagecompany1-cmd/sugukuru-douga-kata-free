@@ -28,8 +28,8 @@
    - `nare`：入れる＝true／入れない＝false（プロンプターの初期値になる。撮る画面でも切り替えられる）。
    - 原稿を本人に見せて OK をもらう。
 3. 撮影：`python3 tools/url.py genko.json` で**撮影プロンプターの URL** を作って渡す。本人はスマホで開いて撮る（`steps/03_satsuei.md`）。
-4. 入れる：本人が GitHub で `inbox/` に動画を入れる（`steps/04_ireru.md`）。入れたら `git pull`。
-5. 仕上げ：`python3 tools/make.py --name <短い題>` → `out/<日付>_<題>/kansei.mp4` と `thumb.jpg`。
+4. 入れる：本人が GitHub で `inbox/` に動画を入れる（`steps/04_ireru.md`）。入れたら `steps/04_ireru.md` の「AI がすること」どおりに main の inbox を取り、`python3 tools/make.py --plan` で当て方を本人に見せる。⛔ があれば作らない。
+5. 仕上げ：`python3 tools/make.py --name <短い題>` → `out/<日付>_<題>/kansei.mp4`・`thumb.jpg`・`kensa.txt`（場面数・長さ・大きさ）。足りない場面があると止まる（飛ばすのは本人 OK の時だけ `--allow-missing`）。90MB を超えると自動で圧縮し直す。
    - 仕上がりを `ffmpeg` で3枚ほど切り出して自分で見る（字幕の切れ・帯の重なり・黒い画面の字）。おかしければ `kata/*.json` を直して作り直す。
 6. 保存：`inbox/` の元の動画は消し（本人の OK をもらってから）、`out/` を保存する。
    - A：`git add -A && git commit -m "動画: <題>" && git push`（ブランチが main でなければ、本人に PR の Merge を頼む）
