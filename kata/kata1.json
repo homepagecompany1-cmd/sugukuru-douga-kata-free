@@ -1,0 +1,10 @@
+{
+  "name": "型1 撮るだけ（縦・スマホに答えるだけ）",
+  "vertical": true,
+  "size": [1080, 1920],
+  "video_area": [0, 300, 1080, 1350],
+  "head": {"height": 300, "solid": true, "title_size": 64, "q_size": 46},
+  "sub": {"size": 76, "outline": 8, "max_chars": 12, "lines": 2, "bottom": 70},
+  "crf": 23,
+  "memo": "上の黒い帯に見出しと、いまの問い（黄色）。真ん中に自分。下の黒い帯に字幕（白・黒ふち・1行12字まで）。"
+}

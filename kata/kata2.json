@@ -1,0 +1,10 @@
+{
+  "name": "型2 対談（横・見出しと字幕）",
+  "vertical": false,
+  "size": [1920, 1080],
+  "video_area": [0, 0, 1920, 1080],
+  "head": {"height": 190, "solid": false, "title_size": 38, "q_size": 40},
+  "sub": {"size": 64, "outline": 7, "max_chars": 20, "lines": 2, "bottom": 70},
+  "crf": 23,
+  "memo": "横向き。左上に見出し（黒い札）と、いまの問い（黄色い帯）。下に字幕（白・黒ふち・1行20字まで）。スマホは横にして撮る。"
+}
