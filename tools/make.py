@@ -349,12 +349,13 @@ def assign(files, rows, kata, by_name=False):
     - 同じ番号が2本・原稿に無い番号・型の違う動画・番号なしの動画が混ざっている時は、作らずに止める（problems に理由）。
     - 番号の無い動画だけの時は、--by-name を付けた時だけ名前順に当てる（本数が場面の数と同じ時だけ）。"""
     m, problems, seen = {}, [], {}
-    numbered = [f for f in files if re.search(r'_r(\d+)', os.path.basename(f))]
+    PAT = re.compile(r'^k(\d+)_r(\d+)(?:[^0-9].*)?\.[A-Za-z0-9]+$')   # k{型}_r{番号}.mp4（後ろに " (1)" 等が付いた物も同じ場面として扱う）
+    numbered = [f for f in files if PAT.match(os.path.basename(f))]
     plain = [f for f in files if f not in numbered]
     for f in numbered:
-        b = os.path.basename(f)
-        n = int(re.search(r'_r(\d+)', b).group(1)); k = re.search(r'(?:^|[^a-z])k(\d)_r', b)
-        if k and int(k.group(1)) != kata: problems.append(f'{b}：型{k.group(1)}の動画です（原稿は型{kata}）'); continue
+        b = os.path.basename(f); g = PAT.match(b)
+        n = int(g.group(2)); kk = int(g.group(1))
+        if kk != kata: problems.append(f'{b}：型{kk}の動画です（原稿は型{kata}）'); continue
         if not 1 <= n <= len(rows): problems.append(f'{b}：場面{n}は原稿にありません（原稿は{len(rows)}場面）'); continue
         if n - 1 in seen: problems.append(f'{b}：場面{n}が2本あります（もう1本は {os.path.basename(seen[n - 1])}）。要らない方を inbox から消してください'); continue
         seen[n - 1] = f; m[n - 1] = f
@@ -413,20 +414,26 @@ def main():
     K = load_kata(kata)
     files = [f for f in glob.glob(os.path.join(a.inbox, '*')) if f.lower().endswith(VID_EXT)]
     if not files: sys.exit(f'動画がありません: {a.inbox}/ に入れてください')
-    stamp = datetime.now(JST).strftime('%Y%m%d_%H%M')
+    stamp = datetime.now(JST).strftime('%Y%m%d_%H%M%S')
     name = re.sub(r'[^\w\-ぁ-んァ-ン一-龥ー]', '', a.name or G.get('dai', '') or f'kata{kata}')[:20] or f'kata{kata}'
-    outdir = os.path.join(ROOT, 'out', f'{stamp}_{name}')
-    work = os.path.join(outdir, 'work'); os.makedirs(work, exist_ok=True)
+    outdir = os.path.join(ROOT, 'out', f'{stamp}_{name}'); k2 = 2
+    while os.path.exists(outdir): outdir = os.path.join(ROOT, 'out', f'{stamp}_{name}_{k2}'); k2 += 1   # 既にある完成品には触らない
+    work = os.path.join(outdir, 'work')
+    single_plain = len(files) == 1 and len(rows) > 1 and not re.search(r'^k\d+_r\d+', os.path.basename(files[0]))
+    if a.plan and single_plain:
+        log(f'番号なしの動画が1本：作る時に長い無音で {len(rows)} 場面に分けます（分けられない時は止まります）'); sys.exit(0)
+    os.makedirs(work)
     big = [f for f in files if os.path.getsize(f) > 100 * 1024 * 1024]
     if big: sys.exit('100MB を超える動画があります（GitHub に入りません）：' + '、'.join(os.path.basename(f) for f in big))
-    if len(files) == 1 and len(rows) > 1 and not re.search(r'_r\d+', os.path.basename(files[0])):
+    if single_plain:
         log('番号なしの動画が1本なので、長い無音で場面ごとに分けます')
         files = split_one(files[0], len(rows), work)
         if len(files) != len(rows) and not a.allow_missing:
-            shutil.rmtree(outdir, ignore_errors=True)
+            shutil.rmtree(outdir, ignore_errors=True)   # 今回作ったフォルダだけ消す
             sys.exit(f'無音の切れ目が足りず {len(files)} 個にしか分けられませんでした（原稿は {len(rows)} 場面）。場面ごとに撮り直すか、本人の OK をもらって --allow-missing')
         a.by_name = True
-    m, problems = assign(files, rows, kata, a.by_name)
+        if len(files) != len(rows): files = files[:len(rows)]
+    m, problems = assign(files, rows if len(files) == len(rows) or not single_plain else rows[:len(files)], kata, a.by_name)
     missing = [i + 1 for i in range(len(rows)) if i not in m]
     log('当て方：' + ' / '.join(f'場面{i + 1}←{os.path.basename(m[i]) if i in m else "（なし）"}' for i in range(len(rows))))
     if problems or (missing and not a.allow_missing) or a.plan:
